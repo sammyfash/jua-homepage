@@ -64,6 +64,7 @@ export function Chart({ series, kind, tf, end, height, animKey, hover, onHover, 
   const dispRef = useRef(targets);
   const [reveal, setReveal] = useState(reducedMotion() ? 1 : 0);
   const lastKey = useRef<string | null>(null);
+  const revealing = useRef(false);
   const cancel = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -73,7 +74,11 @@ export function Chart({ series, kind, tf, end, height, animKey, hover, onHover, 
       dispRef.current = targets;
       setDisp(targets);
       setReveal(0);
-      cancel.current = tween(REVEAL_MS, easeOutQuart, setReveal);
+      revealing.current = true;
+      cancel.current = tween(REVEAL_MS, easeOutQuart, (p) => {
+        setReveal(p);
+        if (p >= 1) revealing.current = false;
+      });
     } else {
       const from = dispRef.current;
       cancel.current = tween(MORPH_MS, easeInOutCubic, (p) => {
@@ -82,7 +87,11 @@ export function Chart({ series, kind, tf, end, height, animKey, hover, onHover, 
         setDisp(d);
       });
     }
-    return () => cancel.current();
+    return () => {
+      cancel.current();
+      // A draw-in cut short (StrictMode's dev remount, or new data mid-reveal) must replay, not morph, or the lines stay clipped away.
+      if (revealing.current) lastKey.current = null;
+    };
   }, [targets, animKey]);
 
   // Spring-smoothed cursor position (fractional point index).
